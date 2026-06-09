@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ListAI Pro – eBay Listing Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; font-family: 'Segoe UI', system-ui, sans-serif; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    input:focus, textarea:focus, select:focus { border-color: rgba(108,99,255,0.5) !important; outline: none; }
+    input::placeholder, textarea::placeholder { color: #333 !important; }
+    button { font-family: inherit; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0a0f; }
+    ::-webkit-scrollbar-thumb { background: #2a2a40; border-radius: 3px; }
+    @media (max-width: 600px) {
+      .grid2 { grid-template-columns: 1fr !important; }
+      .stats4 { grid-template-columns: repeat(2,1fr) !important; }
+      .pricing3 { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const CATEGORIES = [
+      "Electronics","Clothing & Accessories","Home & Garden","Toys & Hobbies",
+      "Sports & Outdoors","Books","Automotive","Jewelry & Watches",
+      "Collectibles","Health & Beauty","Musical Instruments","Other"
+    ];
+    const CONDITIONS = ["New","Like New","Very Good","Good","Acceptable"];
+    const FREE_LIMIT = 3;
+    const PLANS = {
+      free:   { name: "Free",   price: 0,  listings: "3 listings" },
+      pro:    { name: "Pro",    price: 9,  listings: "Unlimited" },
+      agency: { name: "Agency", price: 29, listings: "Unlimited + Team" },
+    };
+    const uid = () => Math.random().toString(36).slice(2,9);
+    const nowDate = () => new Date().toLocaleDateString("en-PK",{day:"numeric",month:"short",year:"numeric"});
+
+    // ── STYLES ──
+    const S = {
+      root: { minHeight:"100vh", background:"#0a0a0f", color:"#fff" },
+      nav: { display:"flex", alignItems:"center", padding:"14px 28px", borderBottom:"1px solid #1a1a2e", background:"rgba(10,10,15,0.97)", position:"sticky", top:0, zIndex:100, gap:16, flexWrap:"wrap" },
+      navLogoMark: { width:34, height:34, background:"linear-gradient(135deg,#6c63ff,#a78bfa)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:18, cursor:"pointer", flexShrink:0 },
+      navBrand: { fontWeight:800, fontSize:17, letterSpacing:-0.5, cursor:"pointer" },
+      navLink: { background:"none", border:"none", color:"#666", fontSize:14, fontWeight:500, cursor:"pointer", padding:"6px 14px", borderRadius:8 },
+      navLinkActive: { color:"#a5a0ff", background:"rgba(108,99,255,0.12)" },
+      planBadge: { background:"rgba(108,99,255,0.15)", border:"1px solid rgba(108,99,255,0.3)", color:"#a5a0ff", fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:20, marginLeft:"auto" },
+      wrap: { maxWidth:780, margin:"0 auto", padding:"36px 20px" },
+      card: { background:"#111118", border:"1px solid #1e1e30", borderRadius:20, padding:"32px 28px", marginBottom:20 },
+      cardTitle: { fontSize:22, fontWeight:800, letterSpacing:-0.5, marginBottom:4 },
+      cardSub: { color:"#555", fontSize:13, marginBottom:28 },
+      label: { display:"block", fontSize:11, fontWeight:700, color:"#555", marginBottom:6, textTransform:"uppercase", letterSpacing:0.8 },
+      input: { width:"100%", background:"#0d0d14", border:"1px solid #1e1e30", borderRadius:10, padding:"11px 14px", color:"#e0e0f0", fontSize:14, boxSizing:"border-box" },
+      select: { width:"100%", background:"#0d0d14", border:"1px solid #1e1e30", borderRadius:10, padding:"11px 14px", color:"#e0e0f0", fontSize:14, boxSizing:"border-box" },
+      textarea: { width:"100%", background:"#0d0d14", border:"1px solid #1e1e30", borderRadius:10, padding:"11px 14px", color:"#e0e0f0", fontSize:14, boxSizing:"border-box", resize:"vertical", fontFamily:"inherit" },
+      btnPrimary: { display:"block", width:"100%", padding:"13px 24px", background:"linear-gradient(90deg,#6c63ff,#a78bfa)", border:"none", borderRadius:12, color:"#fff", fontWeight:700, fontSize:15, cursor:"pointer" },
+      btnGhost: { background:"rgba(255,255,255,0.06)", border:"1px solid #2a2a40", borderRadius:12, color:"#aaa", fontWeight:600, fontSize:14, cursor:"pointer", padding:"10px 20px" },
+      errorBox: { background:"rgba(192,57,43,0.1)", border:"1px solid rgba(192,57,43,0.3)", borderRadius:10, padding:"10px 14px", color:"#e74c3c", fontSize:13, marginTop:12 },
+      resultSection: { marginBottom:18 },
+      resultLabel: { fontSize:11, fontWeight:700, color:"#6c63ff", textTransform:"uppercase", letterSpacing:1, marginBottom:8 },
+      resultBox: { background:"#0d0d14", border:"1px solid #1e1e30", borderRadius:12, padding:"14px 16px", position:"relative" },
+      copyBtn: { position:"absolute", top:10, right:10, background:"rgba(108,99,255,0.15)", border:"1px solid rgba(108,99,255,0.3)", borderRadius:7, padding:"4px 12px", color:"#a5a0ff", fontSize:11, cursor:"pointer", fontWeight:700 },
+      tag: { display:"inline-block", background:"rgba(245,175,2,0.1)", border:"1px solid rgba(245,175,2,0.2)", color:"#f5c842", borderRadius:20, padding:"3px 12px", fontSize:12, marginRight:6, marginBottom:6 },
+      usageBar: { display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(108,99,255,0.08)", border:"1px solid rgba(108,99,255,0.2)", borderRadius:12, padding:"10px 18px", marginBottom:20, fontSize:13, color:"#a5a0ff", flexWrap:"wrap", gap:10 },
+      upgradeChip: { background:"linear-gradient(90deg,#6c63ff,#a78bfa)", border:"none", borderRadius:20, color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", padding:"5px 14px" },
+      loadingWrap: { display:"flex", flexDirection:"column", alignItems:"center", padding:"60px 0", gap:16 },
+      spinner: { width:44, height:44, border:"3px solid #1e1e30", borderTop:"3px solid #6c63ff", borderRadius:"50%", animation:"spin 0.8s linear infinite" },
+      toast: { position:"fixed", bottom:28, right:28, padding:"12px 22px", borderRadius:12, color:"#fff", fontWeight:600, fontSize:14, zIndex:999, boxShadow:"0 8px 32px rgba(0,0,0,0.4)" },
+    };
+
+    // ── TOAST ──
+    function Toast({ msg, type }) {
+      return <div style={{ ...S.toast, background: type==="error" ? "#c0392b" : "#6c63ff" }}>{msg}</div>;
+    }
+
+    // ── NAV ──
+    function Nav({ page, setPage, plan }) {
+      return (
+        <nav style={S.nav}>
+          <div style={S.navLogoMark} onClick={() => setPage("landing")}>L</div>
+          <span style={S.navBrand} onClick={() => setPage("landing")}>ListAI <span style={{color:"#6c63ff"}}>Pro</span></span>
+          <div style={{display:"flex", gap:4}}>
+            {[["app","Generator"],["pricing","Pricing"],["dashboard","Dashboard"]].map(([p,label]) => (
+              <button key={p} style={{...S.navLink,...(page===p?S.navLinkActive:{})}} onClick={() => setPage(p)}>{label}</button>
+            ))}
+          </div>
+          <div style={S.planBadge}>{PLANS[plan].name} Plan</div>
+        </nav>
+      );
+    }
+
+    // ── LANDING ──
+    function Landing({ setPage }) {
+      const features = [
+        {icon:"⚡",title:"AI-Powered Titles",desc:"SEO-optimized 80-char titles that rank higher in eBay search."},
+        {icon:"📝",title:"Full Descriptions",desc:"Persuasive, buyer-ready descriptions written in seconds."},
+        {icon:"🔍",title:"Smart Keywords",desc:"10 targeted search tags per listing to maximize visibility."},
+        {icon:"📦",title:"Shipping Tips",desc:"Smart packaging suggestions to reduce returns and disputes."},
+        {icon:"📊",title:"Listing History",desc:"All your listings saved — revisit, copy, and reuse anytime."},
+        {icon:"💡",title:"Pro Seller Tips",desc:"Insider advice to sell faster and command better prices."},
+      ];
+      return (
+        <div>
+          <div style={{position:"relative", textAlign:"center", padding:"90px 20px 80px", overflow:"hidden"}}>
+            <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:600,height:600,background:"radial-gradient(circle, rgba(108,99,255,0.15) 0%, transparent 70%)",pointerEvents:"none"}} />
+            <div style={{position:"relative", maxWidth:640, margin:"0 auto"}}>
+              <div style={{display:"inline-block",background:"rgba(108,99,255,0.15)",border:"1px solid rgba(108,99,255,0.3)",color:"#a5a0ff",padding:"6px 16px",borderRadius:20,fontSize:13,fontWeight:600,marginBottom:24}}>🚀 AI-Powered eBay Tool</div>
+              <h1 style={{fontSize:"clamp(36px,6vw,64px)",fontWeight:800,lineHeight:1.1,letterSpacing:-2,margin:"0 0 20px"}}>
+                Create Winning<br/>
+                <span style={{background:"linear-gradient(90deg,#6c63ff,#a78bfa,#f5af02)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>eBay Listings</span><br/>
+                in Seconds
+              </h1>
+              <p style={{fontSize:17,color:"#777",lineHeight:1.6,marginBottom:36,maxWidth:480,margin:"0 auto 36px"}}>Stop spending hours writing listings. Our AI generates professional, keyword-rich eBay listings that sell — instantly.</p>
+              <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",marginBottom:48}}>
+                <button style={{...S.btnPrimary,width:"auto"}} onClick={() => setPage("app")}>Try Free — No Signup</button>
+                <button style={S.btnGhost} onClick={() => setPage("pricing")}>See Pricing →</button>
+              </div>
+              <div style={{display:"flex",justifyContent:"center",gap:40,flexWrap:"wrap"}}>
+                {[{n:"50K+",l:"Listings Created"},{n:"98%",l:"Satisfaction Rate"},{n:"3x",l:"Faster than Manual"}].map(s => (
+                  <div key={s.n} style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+                    <span style={{fontSize:28,fontWeight:800,background:"linear-gradient(90deg,#6c63ff,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{s.n}</span>
+                    <span style={{fontSize:12,color:"#555",marginTop:2}}>{s.l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{maxWidth:960,margin:"0 auto",padding:"60px 24px"}}>
+            <div style={{textAlign:"center",marginBottom:48}}>
+              <div style={{display:"inline-block",background:"rgba(108,99,255,0.15)",color:"#a5a0ff",padding:"4px 14px",borderRadius:20,fontSize:12,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>What You Get</div>
+              <h2 style={{fontSize:"clamp(24px,4vw,38px)",fontWeight:800,letterSpacing:-1,margin:"8px 0 0"}}>Everything a Power Seller Needs</h2>
+            </div>
+            <div className="grid2" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:20}}>
+              {features.map(f => (
+                <div key={f.title} style={{background:"#111118",border:"1px solid #1e1e30",borderRadius:16,padding:"24px 22px"}}>
+                  <div style={{fontSize:28,marginBottom:12}}>{f.icon}</div>
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:6}}>{f.title}</div>
+                  <div style={{color:"#666",fontSize:13,lineHeight:1.6}}>{f.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{textAlign:"center",padding:"80px 20px",background:"linear-gradient(135deg,rgba(108,99,255,0.08),rgba(167,139,250,0.05))",borderTop:"1px solid #1a1a2e",borderBottom:"1px solid #1a1a2e"}}>
+            <h2 style={{fontSize:"clamp(24px,4vw,40px)",fontWeight:800,letterSpacing:-1,marginBottom:12}}>Start Listing Smarter Today</h2>
+            <p style={{color:"#666",fontSize:15,marginBottom:32}}>Free plan includes 3 listings. No credit card required.</p>
+            <button style={{...S.btnPrimary,width:"auto",padding:"14px 36px",fontSize:16}} onClick={() => setPage("app")}>Create Your First Listing →</button>
+          </div>
+          <footer style={{display:"flex",justifyContent:"space-between",padding:"20px 32px",borderTop:"1px solid #111",fontSize:12,color:"#333"}}>
+            <span>© 2025 ListAI Pro</span>
+            <span>Powered by Claude AI</span>
+          </footer>
+        </div>
+      );
+    }
+
+    // ── GENERATOR ──
+    function Generator({ canGenerate, plan, usedCount, onCreated, setPage, showToast }) {
+      const [form, setForm] = useState({productName:"",category:"",condition:"",keyFeatures:"",price:"",location:""});
+      const [state, setState] = useState("form");
+      const [listing, setListing] = useState(null);
+      const [error, setError] = useState("");
+      const [copied, setCopied] = useState(null);
+
+      const copy = (text, key) => {
+        navigator.clipboard.writeText(text);
+        setCopied(key);
+        showToast("Copied to clipboard!");
+        setTimeout(() => setCopied(null), 2000);
+      };
+
+      const generate = async () => {
+        if (!canGenerate) { setPage("pricing"); return; }
+        if (!form.productName || !form.category || !form.condition) { setError("Product Name, Category aur Condition zaroori hain."); return; }
+        setError(""); setState("loading");
+        const prompt = `You are an expert eBay seller copywriter. Generate a professional eBay product listing.
+Product: ${form.productName}
+Category: ${form.category}
+Condition: ${form.condition}
+Features: ${form.keyFeatures||"Not provided"}
+Price: ${form.price?"$"+form.price:"Not specified"}
+Location: ${form.location||"Not specified"}
+Return ONLY valid JSON no markdown no explanation:
+{"title":"Optimized eBay title max 80 chars keyword-rich","subtitle":"Catchy subtitle max 55 chars","description":"Full persuasive listing description 3 paragraphs","bulletPoints":["5 key selling points"],"searchTags":["10 relevant eBay search keywords"],"shippingNote":"Practical shipping tip","sellerTip":"One actionable pro tip to sell faster"}`;
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})
+          });
+          const data = await res.json();
+          const text = data.content.map(i=>i.text||"").join("");
+          const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+          setListing(parsed); onCreated(parsed); setState("result");
+        } catch { setError("Kuch masla aaya, dobara try karein."); setState("form"); }
+      };
+
+      const reset = () => { setState("form"); setListing(null); setForm({productName:"",category:"",condition:"",keyFeatures:"",price:"",location:""}); };
+      const remaining = Math.max(0, FREE_LIMIT - usedCount);
+
+      return (
+        <div style={S.wrap}>
+          {plan==="free" && (
+            <div style={S.usageBar}>
+              <span>Free Plan: <b>{remaining}</b> listings remaining</span>
+              <button style={S.upgradeChip} onClick={() => setPage("pricing")}>Upgrade to Pro →</button>
+            </div>
+          )}
+          {state==="form" && (
+            <div style={S.card}>
+              <h2 style={S.cardTitle}>Generate eBay Listing</h2>
+              <p style={S.cardSub}>Product ki details bharo — AI baaki kaam karega</p>
+              <div style={{marginBottom:16}}>
+                <label style={S.label}>Product Name *</label>
+                <input style={S.input} placeholder="e.g. Apple iPhone 14 Pro 256GB" value={form.productName} onChange={e=>setForm({...form,productName:e.target.value})} />
+              </div>
+              <div className="grid2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                <div>
+                  <label style={S.label}>Category *</label>
+                  <select style={S.select} value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>
+                    <option value="">Select category…</option>
+                    {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Condition *</label>
+                  <select style={S.select} value={form.condition} onChange={e=>setForm({...form,condition:e.target.value})}>
+                    <option value="">Select condition…</option>
+                    {CONDITIONS.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={S.label}>Key Features / Details</label>
+                <textarea style={S.textarea} rows={3} placeholder="e.g. Unlocked, original box, battery 92%, minor scratch" value={form.keyFeatures} onChange={e=>setForm({...form,keyFeatures:e.target.value})} />
+              </div>
+              <div className="grid2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                <div>
+                  <label style={S.label}>Asking Price (USD)</label>
+                  <input style={S.input} type="number" placeholder="e.g. 450" value={form.price} onChange={e=>setForm({...form,price:e.target.value})} />
+                </div>
+                <div>
+                  <label style={S.label}>Your Location</label>
+                  <input style={S.input} placeholder="e.g. New York, NY" value={form.location} onChange={e=>setForm({...form,location:e.target.value})} />
+                </div>
+              </div>
+              {error && <div style={S.errorBox}>{error}</div>}
+              {!canGenerate
+                ? <div style={{background:"rgba(245,175,2,0.08)",border:"1px solid rgba(245,175,2,0.25)",borderRadius:12,padding:"14px 18px",color:"#f5c842",fontSize:14,display:"flex",alignItems:"center",gap:14,marginTop:20}}>
+                    Free limit reached! <button style={S.upgradeChip} onClick={()=>setPage("pricing")}>Upgrade to Pro →</button>
+                  </div>
+                : <button style={{...S.btnPrimary,marginTop:20}} onClick={generate}>✦ Generate Listing with AI</button>
+              }
+            </div>
+          )}
+          {state==="loading" && (
+            <div style={S.card}>
+              <div style={S.loadingWrap}>
+                <div style={S.spinner} />
+                <p style={{color:"#888",fontSize:15}}>AI aapki listing bana raha hai…</p>
+                <p style={{color:"#555",fontSize:13}}>Usually takes 5–10 seconds</p>
+              </div>
+            </div>
+          )}
+          {state==="result" && listing && (
+            <div style={S.card}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,flexWrap:"wrap",gap:12}}>
+                <div><h2 style={S.cardTitle}>🎉 Listing Ready!</h2><p style={S.cardSub}>eBay par copy-paste karein</p></div>
+                <button style={S.btnGhost} onClick={reset}>+ New Listing</button>
+              </div>
+              {[["📌 Title",listing.title,"title"],["✏️ Subtitle",listing.subtitle,"sub"]].map(([label,text,key]) => (
+                <div key={key} style={S.resultSection}>
+                  <div style={S.resultLabel}>{label}</div>
+                  <div style={{...S.resultBox,paddingRight:90}}>
+                    <span style={{color:"#ccc"}}>{text}</span>
+                    <button style={S.copyBtn} onClick={()=>copy(text,key)}>{copied===key?"✓ Copied":"Copy"}</button>
+                  </div>
+                </div>
+              ))}
+              <div style={S.resultSection}>
+                <div style={S.resultLabel}>⚡ Key Highlights</div>
+                <div style={S.resultBox}>
+                  {(listing.bulletPoints||[]).map((b,i)=>(
+                    <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",marginTop:7,flexShrink:0}} />
+                      <span style={{color:"#ccc"}}>{b}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={S.resultSection}>
+                <div style={S.resultLabel}>📝 Full Description</div>
+                <div style={{...S.resultBox,paddingRight:90}}>
+                  <p style={{color:"#ccc",lineHeight:1.7}}>{listing.description}</p>
+                  <button style={S.copyBtn} onClick={()=>copy(listing.description,"desc")}>{copied==="desc"?"✓ Copied":"Copy"}</button>
+                </div>
+              </div>
+              <div style={S.resultSection}>
+                <div style={S.resultLabel}>🔍 Search Keywords</div>
+                <div style={S.resultBox}>{(listing.searchTags||[]).map((t,i)=><span key={i} style={S.tag}>{t}</span>)}</div>
+              </div>
+              {listing.shippingNote && (
+                <div style={S.resultSection}>
+                  <div style={S.resultLabel}>📦 Shipping Tip</div>
+                  <div style={{...S.resultBox,paddingRight:90}}>
+                    <span style={{color:"#ccc"}}>{listing.shippingNote}</span>
+                    <button style={S.copyBtn} onClick={()=>copy(listing.shippingNote,"ship")}>{copied==="ship"?"✓ Copied":"Copy"}</button>
+                  </div>
+                </div>
+              )}
+              {listing.sellerTip && (
+                <div style={S.resultSection}>
+                  <div style={S.resultLabel}>💡 Pro Seller Tip</div>
+                  <div style={{...S.resultBox,borderColor:"rgba(108,99,255,0.3)",background:"rgba(108,99,255,0.07)",color:"#a5a0ff"}}>{listing.sellerTip}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── PRICING ──
+    function Pricing({ plan, setPlan, setPage, showToast }) {
+      const plans = [
+        {key:"free",emoji:"🌱",price:"$0",per:"forever free",features:["AI title & description","10 search keywords","Shipping tips","3 listings total"]},
+        {key:"pro",emoji:"⚡",price:"$9",per:"per month",features:["Everything in Free","Unlimited AI listings","Full listing history","Pro seller tips","Priority generation"],popular:true},
+        {key:"agency",emoji:"🏆",price:"$29",per:"per month",features:["Everything in Pro","5 team members","Bulk generation","API access","Dedicated support"]},
+      ];
+      return (
+        <div style={S.wrap}>
+          <div style={{textAlign:"center",marginBottom:40}}>
+            <div style={{display:"inline-block",background:"rgba(108,99,255,0.15)",color:"#a5a0ff",padding:"4px 14px",borderRadius:20,fontSize:12,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Simple Pricing</div>
+            <h2 style={{fontSize:"clamp(24px,4vw,38px)",fontWeight:800,letterSpacing:-1}}>Choose Your Plan</h2>
+            <p style={{color:"#666",fontSize:15,marginTop:8}}>Start free. Upgrade when you're ready.</p>
+          </div>
+          <div className="pricing3" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,maxWidth:860,margin:"0 auto"}}>
+            {plans.map(p=>(
+              <div key={p.key} style={{background:"#111118",border:p.popular?"1px solid rgba(108,99,255,0.5)":"1px solid #1e1e30",borderRadius:20,padding:"28px 24px",position:"relative",background:p.popular?"rgba(108,99,255,0.05)":"#111118"}}>
+                {p.popular && <div style={{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",background:"linear-gradient(90deg,#6c63ff,#a78bfa)",color:"#fff",fontSize:11,fontWeight:700,padding:"4px 14px",borderRadius:20,whiteSpace:"nowrap"}}>Most Popular</div>}
+                <div style={{fontSize:32,marginBottom:12}}>{p.emoji}</div>
+                <div style={{fontWeight:700,fontSize:16,marginBottom:4}}>{PLANS[p.key].name}</div>
+                <div style={{fontSize:34,fontWeight:800,letterSpacing:-1,marginBottom:2}}>{p.price}<span style={{fontSize:14,fontWeight:400,color:"#555"}}> / {p.per}</span></div>
+                <div style={{color:"#6c63ff",fontSize:13,fontWeight:600,marginBottom:16}}>{PLANS[p.key].listings}</div>
+                <div style={{height:1,background:"#1e1e30",margin:"16px 0"}} />
+                {p.features.map(f=><div key={f} style={{fontSize:13,color:"#888",marginBottom:8,display:"flex",gap:8}}><span style={{color:"#6c63ff"}}>✓</span>{f}</div>)}
+                <button style={{...S.btnPrimary,marginTop:24,opacity:plan===p.key?0.5:1,cursor:plan===p.key?"default":"pointer"}}
+                  onClick={() => { if(plan===p.key)return; setPlan(p.key); showToast(`${PLANS[p.key].name} plan activated!`); setPage("app"); }}>
+                  {plan===p.key?"Current Plan":p.key==="free"?"Get Started Free":`Upgrade to ${PLANS[p.key].name}`}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p style={{textAlign:"center",color:"#444",fontSize:13,marginTop:24}}>🔒 Secure payments · Cancel anytime · No hidden fees</p>
+        </div>
+      );
+    }
+
+    // ── DASHBOARD ──
+    function Dashboard({ history, plan, usedCount, setPage }) {
+      const [selected, setSelected] = useState(null);
+      return (
+        <div style={S.wrap}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28,flexWrap:"wrap",gap:12}}>
+            <div><h2 style={S.cardTitle}>Your Dashboard</h2><p style={S.cardSub}>Saari listings ek jagah</p></div>
+            <button style={{...S.btnPrimary,width:"auto",padding:"10px 24px"}} onClick={() => setPage("app")}>+ New Listing</button>
+          </div>
+          <div className="stats4" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28}}>
+            {[{label:"Total Listings",value:history.length},{label:"Plan",value:PLANS[plan].name},{label:"This Month",value:usedCount},{label:"Remaining",value:plan==="free"?Math.max(0,FREE_LIMIT-usedCount):"∞"}].map(s=>(
+              <div key={s.label} style={{background:"#111118",border:"1px solid #1e1e30",borderRadius:14,padding:"18px 16px",textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:800,background:"linear-gradient(90deg,#6c63ff,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{s.value}</div>
+                <div style={{fontSize:11,color:"#555",marginTop:4,textTransform:"uppercase",letterSpacing:0.8}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {history.length===0
+            ? <div style={{textAlign:"center",padding:"60px 20px"}}>
+                <div style={{fontSize:48}}>📋</div>
+                <p style={{color:"#555",marginTop:12}}>Abhi tak koi listing nahi bani.</p>
+                <button style={{...S.btnPrimary,width:"auto",padding:"10px 28px",marginTop:16}} onClick={() => setPage("app")}>Pehli Listing Banao</button>
+              </div>
+            : <div>
+                {history.map(h=>(
+                  <div key={h.id}>
+                    <div style={{background:"#111118",border:"1px solid #1e1e30",borderRadius:12,padding:"16px 20px",marginBottom:selected===h.id?0:10,display:"flex",alignItems:"center",cursor:"pointer",borderBottomLeftRadius:selected===h.id?0:12,borderBottomRightRadius:selected===h.id?0:12}} onClick={()=>setSelected(selected===h.id?null:h.id)}>
+                      <div style={{flex:1}}>
+                        <div style={{color:"#e0e0f0",fontWeight:600,fontSize:14}}>{h.title}</div>
+                        <div style={{color:"#555",fontSize:12,marginTop:3}}>{h.date}</div>
+                      </div>
+                      <span style={{color:"#6c63ff",fontSize:12}}>{selected===h.id?"▲ Hide":"▼ View"}</span>
+                    </div>
+                    {selected===h.id && (
+                      <div style={{background:"#0d0d14",border:"1px solid #1e1e30",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px 20px",marginBottom:10,color:"#a0a0cc",fontSize:13,lineHeight:1.8}}>
+                        <b style={{color:"#f5af02"}}>Title:</b> {h.listing.title}<br/>
+                        <b style={{color:"#f5af02"}}>Tags:</b> {(h.listing.searchTags||[]).join(", ")}<br/>
+                        <b style={{color:"#f5af02"}}>Tip:</b> {h.listing.sellerTip}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+      );
+    }
+
+    // ── APP ──
+    function App() {
+      const [page, setPage] = useState("landing");
+      const [plan, setPlan] = useState("free");
+      const [usedCount, setUsedCount] = useState(0);
+      const [history, setHistory] = useState([]);
+      const [toast, setToast] = useState(null);
+
+      const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),2800); };
+      const canGenerate = plan!=="free" || usedCount < FREE_LIMIT;
+      const onCreated = (listing) => { setUsedCount(c=>c+1); setHistory(h=>[{id:uid(),date:nowDate(),title:listing.title,listing},...h]); showToast("Listing successfully generated!"); };
+
+      return (
+        <div style={S.root}>
+          {toast && <Toast msg={toast.msg} type={toast.type} />}
+          <Nav page={page} setPage={setPage} plan={plan} />
+          {page==="landing"   && <Landing setPage={setPage} />}
+          {page==="app"       && <Generator canGenerate={canGenerate} plan={plan} usedCount={usedCount} onCreated={onCreated} setPage={setPage} showToast={showToast} />}
+          {page==="pricing"   && <Pricing plan={plan} setPlan={setPlan} setPage={setPage} showToast={showToast} />}
+          {page==="dashboard" && <Dashboard history={history} plan={plan} usedCount={usedCount} setPage={setPage} />}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
